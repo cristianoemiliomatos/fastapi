@@ -1,13 +1,14 @@
-from idna.uts46data import uts46_statuses
-from fastapi import APIRouter
-from models import Usuario, db
-from sqlalchemy.orm import sessionmaker
+from passlib.context import CryptContext
+from sqlalchemy.orm import sessionmaker, Session
+from models import db
 
+SessionLocal = sessionmaker(bind=db)
 
 def pegar_sessao():
+    session: Session = SessionLocal()
     try:
-        Session = sessionmaker(bind=db)
-        session = Session()
         yield session
     finally:
         session.close()
+
+bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
