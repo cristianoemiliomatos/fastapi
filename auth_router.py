@@ -1,17 +1,24 @@
 from sqlalchemy import false
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from dependecies import pegar_sessao, bcrypt_context
+from dependecies import pegar_sessao, verificar_token, bcrypt_context, SECRET_KEY, ALGORITH, ACESS_TOKEN_EXPIRE_MINUTES
 from models import Usuario
+from passlib.context import CryptContext
 from schemas import UsuarioSchemas
 from schemas import LoginSchema
+from jose import JWTError, jwt
+from datetime import datetime, timedelta, timezone
+from fastapi.security import OAuth2PasswordRequestForm
 
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-def criar_token(id_usuario):
-    token = f"ejfneijfnwnf{id_usuario}"
-    return token
+def criar_token(id_usuario, duracao_token=timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES)):
+    data_expiracao = datetime.now(timezone.utc) + duracao_token
+    dic_inf = {"sub":str(id_usuario), "exp":data_expiracao}
+    jwt_codificado = jwt.encode(dic_inf,SECRET_KEY, ALGORITH)
+    return jwt_codificado
+
 
 
 def autenticar(email, senha, session):
@@ -22,6 +29,7 @@ def autenticar(email, senha, session):
     elif not bcrypt_context.verify(senha, usuario.senha):
         return False
     return usuario
+
 
          
 
@@ -59,16 +67,40 @@ async def criar_conta(
 
 
 
-@auth_router.post("/login")
-async def login(login_schema:LoginSchema, session: Session = Depends(pegar_sessao)):
-
-
-    usuario = autenticar(login_schema.email,login_schema.senha,session)
+@auth_router.post("/login_form")
+async def login_form(dados_formulario: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(pegar_sessao)):
+    usuario = autenticar(dados_formulario.username, dados_formulario.password, session)
     if not usuario:
         raise HTTPException(status_code=400, detail="usuario não encontrado ou credenciais invalidas")
-    else:
-        acess_token = criar_token(usuario.id)
+    
+    access_token = criar_token(usuario.id)
+    refresh_token = criar_token(usuario.id, duracao_token=timedelta(days=7))
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+@auth_router.post("/login")
+async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sessao)):
+     usuario = autenticar(login_schema.email, login_schema.senha, session)
+     if not usuario:
+        raise HTTPException(status_code=400, detail="Usuário não encontrado ou credenciais inválidas")
+     else:
+        access_token = criar_token(usuario.id)
+        refresh_token = criar_token(usuario.id, duracao_token=timedelta(days=7))
         return {
-            "acess_token":acess_token,
-            "token_type":"Bearer"
-        }
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "Bearer"
+            }
+
+
+
+@auth_router.get("/refresh")
+async def use_refresh_toke(usuario: Usuario = Depends(verificar_token)):
+    acess_token = criar_token(usuario.id)
+    return {
+        "acess_token":acess_token,
+        "token_type":"Bearer"
+    }        
