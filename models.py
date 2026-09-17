@@ -1,5 +1,8 @@
+from sqlalchemy.orm import CascadeOptions
+from sqlalchemy import case
+from sqlalchemy.orm import relationship
 from sqlalchemy import Column, create_engine, String, Integer, Boolean, Float, ForeignKey
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy_utils import ChoiceType
 
 db = create_engine("sqlite:///banco.db")
@@ -38,11 +41,15 @@ class Pedido(Base):
     status = Column("status", ChoiceType(choices=STATUS_PEDIDOS), nullable=False, default="PENDENTE")
     preco = Column("preco", Float, nullable=False, default=0.0)
     usuario = Column("usuario", Integer, ForeignKey("usuarios.id"))
+    itens = relationship("ItemPedido", cascade="all, delete")
 
     def __init__(self, usuario, status="PENDENTE", preco=0.00):
         self.usuario = usuario
         self.status = status
         self.preco = preco
+
+    def calcular_preco(self):
+        self.preco = sum(item.preco * item.quantidade for item in self.itens)
 
 
 class ItemPedido(Base):
@@ -53,9 +60,12 @@ class ItemPedido(Base):
     tamanho = Column("tamanho", String)
     preco = Column("preco", Float)
     pedido = Column("pedido", Integer, ForeignKey("pedidos.id"))
+    quantidade = Column("quantidade", Integer, default=1)
 
     def __init__(self, sabor, tamanho, preco, pedido, quantidade=1):
         self.sabor = sabor
         self.tamanho = tamanho
         self.preco = preco
         self.pedido = pedido
+        self.quantidade = quantidade
+

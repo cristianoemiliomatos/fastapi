@@ -37,5 +37,7 @@ def verificar_token(token: str = Depends(oauth2_schema),session: Session = Depen
 
     if not usuario:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario não encontrado")
+    
+    return usuario
         
     
